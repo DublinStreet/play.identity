@@ -1,0 +1,99 @@
+name: Deploy Identity Principal
+
+on: [workflow_dispatch]
+
+jobs:
+  #deploy identity principal and grant it access to key vault
+  deploy-identity:
+    runs-on: ubuntu-latest 
+
+    permissions: 
+      id-token: write 
+      contents: read
+        
+    steps: 
+      - name: Checkout code 
+        uses: actions/checkout@v2 
+                
+      - name: Set up Terraform 
+        uses: hashicorp/setup-terraform@v2 
+                
+      - name: Azure Login
+        uses: Azure/login@v1
+        with:
+            # ClientId of the Azure Service principal created.
+            client-id: ${{secrets.SERVICE_PRINCIPAL_CLIENT_ID}}
+            # TenantId of the Azure Service principal created.
+            tenant-id: ${{secrets.TENANT_ID}}
+            # Azure subscriptionId
+            subscription-id: ${{secrets.SUBSCRIPTION_ID}}   
+    
+
+      - name: Terraform Init 
+        run: |            
+              terraform init \
+              -backend-config="storage_account_name=${{ secrets.STORAGE_ACCOUNT }}" \
+              -backend-config="container_name=tfstate" \
+              -backend-config="key=identity.tfstate" \
+              -backend-config="access_key=${{ secrets.REMOTE_STORAGE_KEY }}"     
+
+      - name: Terraform Plan 
+        run: |            
+              terraform plan -out=plan.out 
+        env:            
+          TF_VAR_resource_group_name: ${{ secrets.APP_NAME }}
+          TF_VAR_tenant_id: ${{ secrets.TENANT_ID }}
+          TF_VAR_app_name: ${{ secrets.APP_NAME }}
+          TF_VAR_location: eastus           
+          TF_VAR_service_principal_client_id: ${{ secrets.SERVICE_PRINCIPAL_CLIENT_ID }} 
+          TF_VAR_key_vault_name: ${{ secrets.APP_NAME }}        
+          TF_VAR_namespace: identity              
+          TF_VAR.admin_username: github         
+
+      - name: Terraform Apply 
+        run: |            
+              terraform apply -input=false plan.out 
+        env:           
+          TF_VAR_resource_group_name: ${{ secrets.APP_NAME }}
+          TF_VAR_tenant_id: ${{ secrets.TENANT_ID }}
+          TF_VAR_app_name: ${{ secrets.APP_NAME }}
+          TF_VAR_location: eastus           
+          TF_VAR_service_principal_client_id: ${{ secrets.SERVICE_PRINCIPAL_CLIENT_ID }} 
+          TF_VAR_key_vault_name: ${{ secrets.APP_NAME }}        
+          TF_VAR_namespace: identity              
+          TF_VAR.admin_username: github      
+
+
+  #create workload identity
+  deploy-federated-identity:
+    runs-on: ubuntu-latest
+    needs: deploy-identity
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      
+
+      - name: Azure Login
+        uses: Azure/login@v1
+        with:
+            # ClientId of the Azure Service principal created.
+            client-id: ${{secrets.SERVICE_PRINCIPAL_CLIENT_ID}}
+            # TenantId of the Azure Service principal created.
+            tenant-id: ${{secrets.TENANT_ID}}
+            # Azure subscriptionId
+            subscription-id: ${{secrets.SUBSCRIPTION_ID}}   
+      
+      - name: Set up Azure CLI and run commands
+        uses: azure/CLI@v1
+        with:
+          inlineScript: |        
+            appname=${{ secrets.APP_NAME }}
+            namespace=identity
+            AKS_OIDC_ISSUER=$(az aks show -g $appname -n $appname --query oidcIssuerProfile.issuerUrl -o tsv)
+            az identity federated-credential create --name $namespace --identity-name $namespace --resource-group $appname --issuer $AKS_OIDC_ISSUER --subject "system:serviceaccount:${namespace}:${namespace}-serviceaccount"
