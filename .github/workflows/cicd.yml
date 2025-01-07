@@ -87,11 +87,12 @@ jobs:
     - name: Build and push Docker image
       uses: docker/build-push-action@v3
       with:
-        secrets: |
-          "GH_OWNER=${{github.repository_owner}}"
-          "GH_PAT=${{secrets.GH_PAT}}"
-        tags: ${{env.APP_NAME}}.azurecr.io/play.identity:${{ needs.generate-version.outputs.new_version }}
+        context: .
         push: true
+        tags: ${{secrets.APP_NAME}}.azurecr.io/play.identity:${{ needs.generate-version.outputs.new_version }}
+        build-args: |
+          GH_OWNER=${{ github.repository_owner }}
+          GH_PAT=${{ secrets.GH_PAT }}
 
     - name: Get AKS Credentials
       run: az aks get-credentials --resource-group ${{ env.APP_NAME }} --name ${{ env.APP_NAME }}
