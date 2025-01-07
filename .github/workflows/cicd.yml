@@ -100,6 +100,11 @@ jobs:
       uses: Azure/setup-helm@v3
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Create namespace if not exists
+      run: |
+        kubectl create namespace ${{env.SERVICE_NAME}} || true
+
 
     - name: Login to Helm registry
       run: |
