@@ -118,5 +118,3 @@ jobs:
         --set image.tag=${{needs.generate-version.outputs.new_version}} \
         --install \
         --wait
-        
-      

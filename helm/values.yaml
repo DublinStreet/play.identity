@@ -31,4 +31,4 @@ certificate:
   secretName: signing-cert
   hostname: dublinhouse.eastus.cloudapp.azure.com
 
-identityClientId: b68260b6-466a-4483-b432-6df6f7073df1
+identityClientId: 60a5138a-e007-46b9-b06f-8d69cd360211
